@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Toko - Gmail Fresh</title>
+<style>
+body{background:#0b0b0b;color:#eafaf1;font-family:sans-serif;padding:12px}
+h1{text-align:center;color:#00d35b}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-top:12px}
+.card{background:#111;padding:10px;border-radius:10px;text-align:center}
+img{width:100%;border-radius:8px}
+button{background:#00d35b;color:#001;border:none;padding:8px 10px;border-radius:8px;cursor:pointer}
+input{width:95%;padding:8px;border-radius:8px;border:none;margin:6px 0}
+.note{font-size:13px;color:#9aa5a0;text-align:center}
+.formBox{max-width:420px;margin:12px auto;background:#0f0f0f;padding:12px;border-radius:10px}
+</style>
+</head>
+<body>
+<h1>Toko Gmail Fresh</h1>
+<p class="note">Pembayaran via DANA — 081574769589 (A/N Nenih)</p>
+
+<div id="produk" class="grid">Loading produk...</div>
+
+<div id="checkout" class="formBox" style="display:none">
+  <h3 id="ckTitle">Checkout</h3>
+  <input id="namaPengirim" placeholder="Nama pengirim DANA">
+  <input id="kontak" placeholder="Nomor WhatsApp atau Email">
+  <div style="text-align:center">
+    <button onclick="kirimOrder()">Kirim Pembayaran</button>
+  </div>
+  <p class="note" style="margin-top:8px">Setelah dikirim, tunggu admin ACC. Jika accepted, kamu akan melihat akun (email + password) di sini.</p>
+</div>
+
+<div id="statusBox" class="formBox" style="display:none"></div>
+
+<script>
+const BIN_ID = "68f08ef8ae596e708f1668a6";
+const MASTER_KEY = "$2a$10$RrK3Tfyj9sFc1HEUXuTgmOa45uOdTGHwXOb6cDC9Kn.YO.Sca0hkW";
+const URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+let produkList = [];
+let selectedProductId = null;
+
+// ambil data record
+async function fetchRecord(){
+  try{
+    const r = await fetch(`${URL}/latest`);
+    if(!r.ok) return {produk:[],orders:[]};
+    const j = await r.json();
+    return j.record || {produk:[],orders:[]};
+  }catch(e){
+    return {produk:[],orders:[]};
+  }
+}
+
+async function renderProduk(){
+  const rec = await fetchRecord();
+  produkList = rec.produk || [];
+  const area = document.getElementById("produk");
+  if(produkList.length===0){ area.innerHTML = "<div class='note'>Belum ada produk. Coba buka admin panel.</div>"; return; }
+  area.innerHTML = produkList.map(p=>`
+    <div class="card">
+      <img src="${p.foto||'https://via.placeholder.com/200'}" alt="">
+      <div style="margin-top:8px"><b>${p.nama}</b></div>
+      <div>Rp ${p.harga}</div>
+      <button onclick="mulaiBeli('${p.id}')">Beli Sekarang</button>
+    </div>
+  `).join("");
+}
+
+function mulaiBeli(id){
+  selectedProductId = id;
+  const p = produkList.find(x=>x.id===id) || {};
+  document.getElementById("ckTitle").innerText = `Beli: ${p.nama||''} — Rp ${p.harga||''}`;
+  document.getElementById("checkout").style.display = "block";
+  document.getElementById("statusBox").style.display = "none";
+}
+
+async function kirimOrder(){
+  const nama = document.getElementById("namaPengirim").value.trim();
+  const kontak = document.getElementById("kontak").value.trim();
+  if(!nama || !kontak) return alert("Isi nama pengirim dan kontak");
+  const rec = await fetchRecord();
+  rec.orders = rec.orders || [];
+  const p = (rec.produk||[]).find(x=>x.id===selectedProductId) || {id:selectedProductId,nama:""};
+  const order = {
+    id: "ord_" + Date.now(),
+    produkId: p.id,
+    produkNama: p.nama,
+    nama: nama,
+    kontak: kontak,
+    status: "pending",
+    akun: null,
+    createdAt: new Date().toISOString()
+  };
+  rec.orders.push(order);
+  // simpan (untuk simpan butuh master key) -- PUT ke bin
+  try{
+    await fetch(URL, {
+      method: "PUT",
+      headers: {
+        "Content-Type":"application/json",
+        "X-Master-Key": MASTER_KEY
+      },
+      body: JSON.stringify(rec)
+    });
+    alert("Pesanan terkirim! Tunggu admin ACC.");
+    document.getElementById("checkout").style.display = "none";
+    tampilStatus(order.id);
+  }catch(e){
+    console.error(e);
+    alert("Gagal kirim pesanan. Cek console.");
+  }
+}
+
+async function tampilStatus(orderId){
+  const rec = await fetchRecord();
+  const order = (rec.orders||[]).find(x=>x.id===orderId);
+  const box = document.getElementById("statusBox");
+  if(!order){ box.style.display='block'; box.innerHTML = "<div class='note'>Pesanan tidak ditemukan.</div>"; return; }
+  if(order.status === "pending"){
+    box.style.display='block';
+    box.innerHTML = `<b>Status:</b> Sedang diproses (loading...)<br>Produk: ${order.produkNama}<br>Pengirim: ${order.nama}<br>Kontak: ${order.kontak}`;
+  } else if(order.status === "accepted"){
+    box.style.display='block';
+    box.innerHTML = `<b>Status:</b> Diterima ✅<br>Produk: ${order.produkNama}<br>Akun:<br>Email: <b>${order.akun?.email||'-'}</b><br>Password: <b>${order.akun?.pass||'-'}</b>`;
+  } else {
+    box.style.display='block';
+    box.innerHTML = `<b>Status:</b> Ditolak ❌<br>Produk: ${order.produkNama}`;
+  }
+}
+
+// optional: cek status terakhir (simple) — user bisa refresh juga
+// Kamu bisa tampilkan list pesanan di sini jika mau.
+
+renderProduk();
+</script>
+</body>
+</html>
