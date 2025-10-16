@@ -1,182 +1,408 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Admin Panel</title>
-<style>
-body{background:#0b0b0b;color:#eafaf1;font-family:sans-serif;padding:14px}
-h1{color:#00d35b}
-input,button,textarea{padding:8px;margin:6px 0;border-radius:8px;border:none}
-button{cursor:pointer}
-.card{background:#111;padding:12px;border-radius:10px;margin:10px 0}
-img{max-width:100%;border-radius:8px}
-.accept{background:#00d35b;color:#001;padding:8px;border-radius:8px;border:none}
-.danger{background:#440000;color:#fff;padding:8px;border-radius:8px;border:none}
-.small{font-size:13px;color:#9aa5a0}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Admin jsonbin.io</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f0f4f8; }
+        .card { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06); }
+        .btn { transition: all 0.15s ease-in-out; }
+    </style>
 </head>
-<body>
-<h1>Admin Panel</h1>
-<p class="small">Tambah produk lewat form ini — tidak ada produk yang otomatis dibuat di JSONBin.</p>
+<body class="p-4 sm:p-8">
 
-<div class="card">
-  <h3>Tambah Produk</h3>
-  <input id="pNama" placeholder="Nama produk (contoh: Gmail Fresh)"><br>
-  <input id="pFoto" placeholder="Link foto (https://...)"><br>
-  <input id="pHarga" placeholder="Harga (angka)"><br>
-  <button onclick="tambahProduk()" class="accept">Tambah Produk</button>
-</div>
+    <div id="app" class="max-w-6xl mx-auto">
+        <h1 class="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">Panel Admin Toko Dinamis (jsonbin.io)</h1>
 
-<div class="card">
-  <h3>Daftar Produk (dari JSONBin)</h3>
-  <div id="produkArea">Loading...</div>
-</div>
+        <!-- Aksi Global (Tombol Sinkronisasi) -->
+        <div class="card bg-white p-6 rounded-xl mb-8 border-t-4 border-indigo-600">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Sinkronisasi Data (Kunci Tersembunyi)</h2>
+            
+            <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 mt-2">
+                <button onclick="loadData()" class="flex-1 btn bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-blue-700">
+                    <span id="loadText">Muat Data (GET)</span>
+                </button>
+                <button onclick="saveData()" class="flex-1 btn bg-green-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-green-700">
+                    <span id="saveText">Simpan Perubahan (PUT)</span>
+                </button>
+            </div>
+            
+            <p id="statusMessage" class="mt-4 text-sm text-center font-medium"></p>
+        </div>
 
-<div class="card">
-  <h3>Pesanan</h3>
-  <div id="ordersArea">Loading...</div>
-</div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Kolom Kiri: Tambah Produk Baru -->
+            <div class="lg:col-span-1">
+                <div class="card bg-white p-6 rounded-xl border-t-4 border-emerald-600 mb-8 sticky top-4">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-700">Tambah Produk Baru</h2>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label for="productName" class="block text-sm font-medium text-gray-700">Nama Produk</label>
+                            <input type="text" id="productName" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
+                        </div>
+                        <div>
+                            <label for="productPhotoLink" class="block text-sm font-medium text-gray-700">Link Foto Produk (URL)</label>
+                            <input type="url" id="productPhotoLink" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
+                        </div>
+                        <div>
+                            <label for="productPrice" class="block text-sm font-medium text-gray-700">Harga (Misal: Rp 50.000)</label>
+                            <input type="text" id="productPrice" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
+                        </div>
+                    </div>
+                    
+                    <button onclick="addProduct()" class="mt-6 w-full btn bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-700">
+                        Tambah Produk & Simpan
+                    </button>
+                </div>
+            </div>
 
-<script>
-const BIN_ID = "68f08ef8ae596e708f1668a6";
-const MASTER_KEY = "$2a$10$RrK3Tfyj9sFc1HEUXuTgmOa45uOdTGHwXOb6cDC9Kn.YO.Sca0hkW";
-const URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+            <!-- Kolom Kanan: Daftar Produk dan Pesanan -->
+            <div class="lg:col-span-2">
+                
+                 <!-- Bagian Daftar Pesanan -->
+                <div class="card bg-yellow-50 p-6 rounded-xl border-t-4 border-yellow-600 mb-8">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-700" id="ordersTitle">Manajemen Pesanan (0 Pesanan)</h2>
+                    
+                    <div id="ordersList" class="space-y-4">
+                        <p class="text-center text-gray-500" id="loadingOrders">Muat data untuk melihat pesanan.</p>
+                    </div>
+                </div>
 
-async function fetchRecord(){
-  try{
-    const r = await fetch(`${URL}/latest`);
-    if(!r.ok) return {produk:[],orders:[]};
-    const j = await r.json();
-    return j.record || {produk:[],orders:[]};
-  }catch(e){
-    return {produk:[],orders:[]};
-  }
-}
+                <!-- Bagian Daftar Produk -->
+                <div class="card bg-white p-6 rounded-xl border-t-4 border-indigo-600">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-700" id="productsTitle">Daftar Produk (0 Produk)</h2>
+                    
+                    <!-- Header Tabel -->
+                    <div class="hidden sm:grid grid-cols-12 text-xs font-bold text-gray-500 uppercase border-b pb-2 mb-3">
+                        <div class="col-span-5">Nama Produk</div>
+                        <div class="col-span-4">Harga</div>
+                        <div class="col-span-3 text-right">Aksi</div>
+                    </div>
 
-async function putRecord(record){
-  await fetch(URL, {
-    method: "PUT",
-    headers: {
-      "Content-Type":"application/json",
-      "X-Master-Key": MASTER_KEY
-    },
-    body: JSON.stringify(record)
-  });
-}
-
-// generate simple unique id
-function genId(prefix="p"){
-  return prefix + Date.now() + Math.floor(Math.random()*900).toString();
-}
-
-async function tambahProduk(){
-  const nama = document.getElementById("pNama").value.trim();
-  const foto = document.getElementById("pFoto").value.trim();
-  const harga = document.getElementById("pHarga").value.trim();
-  if(!nama || !harga){ alert("Isi nama dan harga"); return; }
-  const rec = await fetchRecord();
-  rec.produk = rec.produk || [];
-  const item = { id: genId("p"), nama, foto: foto||"", harga: Number(harga) };
-  rec.produk.push(item);
-  await putRecord(rec);
-  document.getElementById("pNama").value="";
-  document.getElementById("pFoto").value="";
-  document.getElementById("pHarga").value="";
-  await muat();
-  alert("Produk ditambahkan!");
-}
-
-async function muat(){
-  const rec = await fetchRecord();
-  // produk
-  const prodEl = document.getElementById("produkArea");
-  const produk = rec.produk || [];
-  if(produk.length===0) prodEl.innerHTML = "<div class='small'>Belum ada produk</div>";
-  else prodEl.innerHTML = produk.map(p=>`
-    <div style="margin-bottom:8px;padding:8px;background:#0f0f0f;border-radius:8px">
-      <b>${p.nama}</b><br>
-      Harga: Rp ${p.harga}<br>
-      ${p.foto?`<img src="${p.foto}" style="max-width:180px;margin-top:6px">`:""}
-      <div style="margin-top:6px">
-        <button onclick='editProduk("${p.id}")' style="margin-right:6px">Edit</button>
-        <button onclick='hapusProduk("${p.id}")' class="danger">Hapus</button>
-      </div>
+                    <div id="productsList" class="space-y-4">
+                        <p class="text-center text-gray-500" id="loadingProducts">Data akan dimuat otomatis.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-  `).join("");
-  // orders
-  const ordEl = document.getElementById("ordersArea");
-  const orders = rec.orders || [];
-  if(orders.length===0) ordEl.innerHTML = "<div class='small'>Belum ada pesanan</div>";
-  else ordEl.innerHTML = orders.map((o,idx)=>`
-    <div style="margin-bottom:10px;padding:10px;background:#0f0f0f;border-radius:8px">
-      <b>${o.produkNama||o.produkId}</b><br>
-      Pengirim: ${o.nama || "-"}<br>
-      Kontak: ${o.kontak || "-"}<br>
-      Status: <b>${o.status || "pending"}</b><br>
-      ${o.status === "pending" ? `
-        <button onclick='accOrder(${idx})' class="accept">ACC (kirim akun)</button>
-        <button onclick='rejectOrder(${idx})' class="danger">Tolak</button>
-      ` : o.status === "accepted" ? `
-        ✅ Diterima<br>Email: ${o.akun?.email||"-"}<br>Pass: ${o.akun?.pass||"-"}
-      ` : `❌ Ditolak`}
-    </div>
-  `).join("");
-}
 
-async function editProduk(id){
-  const rec = await fetchRecord();
-  const p = (rec.produk||[]).find(x=>x.id===id);
-  if(!p) return alert("Produk tidak ditemukan");
-  const nama = prompt("Nama produk:", p.nama);
-  if(nama===null) return;
-  const foto = prompt("Link foto (kosong = tetap):", p.foto||"");
-  if(foto===null) return;
-  const harga = prompt("Harga:", p.harga);
-  if(harga===null) return;
-  p.nama = nama.trim()||p.nama;
-  p.foto = foto.trim();
-  p.harga = Number(harga) || p.harga;
-  await putRecord(rec);
-  await muat();
-}
+    <script>
+        // =====================================================================================
+        // !!! PERHATIAN: GANTI NILAI PLACEHOLDER DI BAWAH INI DENGAN KUNCI ANDA YANG SEBENARNYA !!!
+        // =====================================================================================
+        const BIN_ID = "68f08ef8ae596e708f1668a6"; // Ganti dengan Bin ID jsonbin.io Anda
+        const MASTER_KEY = "$2a$10$RrK3Tfyj9sFc1HEUXuTgmOa45uOdTGHwXOb6cDC9Kn.YO.Sca0hkW"; // Ganti dengan X-Master-Key jsonbin.io Anda
+        // =====================================================================================
 
-async function hapusProduk(id){
-  if(!confirm("Hapus produk ini?")) return;
-  const rec = await fetchRecord();
-  rec.produk = (rec.produk||[]).filter(x=>x.id!==id);
-  await putRecord(rec);
-  await muat();
-}
+        // Data Global
+        const API_URL = 'https://api.jsonbin.io/v3/b/';
+        let appData = {
+            products: [],
+            orders: []
+        };
+        let isSaving = false;
 
-async function accOrder(idx){
-  const rec = await fetchRecord();
-  const order = rec.orders[idx];
-  if(!order) return alert("Order tidak ditemukan");
-  const email = prompt("Masukkan EMAIL untuk dikirim ke pembeli:");
-  if(email===null) return;
-  const pass = prompt("Masukkan PASSWORD untuk akun:");
-  if(pass===null) return;
-  order.status = "accepted";
-  order.akun = { email, pass };
-  // save
-  await putRecord(rec);
-  await muat();
-  alert("Order di-ACC. Akun tersimpan di order.");
-}
+        // Inisialisasi: Muat data otomatis saat halaman dimuat
+        document.addEventListener('DOMContentLoaded', () => {
+            if (BIN_ID && MASTER_KEY && BIN_ID !== "MASUKKAN_BIN_ID_ANDA_DI_SINI") {
+                loadData();
+            } else {
+                 document.getElementById('loadingProducts').textContent = 'Harap masukkan BIN_ID dan MASTER_KEY di kode JavaScript.';
+                 document.getElementById('loadingOrders').textContent = 'Harap masukkan BIN_ID dan MASTER_KEY di kode JavaScript.';
+                 updateStatus('Konfigurasi kunci belum lengkap.', 'error');
+            }
+        });
 
-async function rejectOrder(idx){
-  const rec = await fetchRecord();
-  const order = rec.orders[idx];
-  if(!order) return alert("Order tidak ditemukan");
-  if(!confirm("Tolak order ini?")) return;
-  order.status = "rejected";
-  await putRecord(rec);
-  await muat();
-}
+        /**
+         * Menampilkan pesan status di UI
+         */
+        function updateStatus(message, type) {
+            const statusMessage = document.getElementById('statusMessage');
+            statusMessage.textContent = message;
+            statusMessage.className = 'mt-4 text-sm text-center font-medium';
 
-// load
-muat();
-</script>
+            if (type === 'success') {
+                statusMessage.classList.add('text-green-600');
+            } else if (type === 'error') {
+                statusMessage.classList.add('text-red-600');
+            } else if (type === 'loading') {
+                statusMessage.classList.add('text-blue-600');
+            }
+        }
+
+        /**
+         * Mengambil data JSON dari jsonbin.io (GET)
+         */
+        async function loadData() {
+            if (!BIN_ID || !MASTER_KEY) {
+                updateStatus('Kesalahan: Kunci API (BIN_ID/MASTER_KEY) belum dikonfigurasi.', 'error');
+                return;
+            }
+
+            updateStatus('Memuat data...', 'loading');
+            document.getElementById('loadText').textContent = 'Memuat...';
+            document.getElementById('loadingProducts').textContent = 'Memuat daftar produk...';
+            document.getElementById('loadingOrders').textContent = 'Memuat daftar pesanan...';
+
+            try {
+                const response = await fetch(`${API_URL}${BIN_ID}/latest`, {
+                    method: 'GET',
+                    headers: {
+                        'X-Master-Key': MASTER_KEY,
+                        'X-Bin-Meta-Data': 'false'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Gagal memuat: ${response.statusText}.`);
+                }
+
+                const data = await response.json();
+                
+                // Pastikan struktur data lengkap
+                if (data.products && Array.isArray(data.products)) {
+                    appData = {
+                        products: data.products || [],
+                        orders: data.orders || []
+                    };
+                } else {
+                    appData = { products: [], orders: [] };
+                    updateStatus('Data dimuat, namun struktur JSON di-reset ke default. Harap simpan!', 'error');
+                }
+                
+                renderProducts();
+                renderOrders();
+                updateStatus('Data berhasil dimuat!', 'success');
+                
+            } catch (error) {
+                console.error("Kesalahan saat memuat data:", error);
+                updateStatus(`Kesalahan: ${error.message}`, 'error');
+            } finally {
+                document.getElementById('loadText').textContent = 'Muat Data (GET)';
+            }
+        }
+
+        /**
+         * Menyimpan data JSON ke jsonbin.io (PUT)
+         */
+        async function saveData() {
+            if (isSaving) return;
+            isSaving = true;
+
+            if (!BIN_ID || !MASTER_KEY) {
+                updateStatus('Kesalahan: Kunci API (BIN_ID/MASTER_KEY) belum dikonfigurasi.', 'error');
+                isSaving = false;
+                return;
+            }
+
+            updateStatus('Menyimpan perubahan...', 'loading');
+            document.getElementById('saveText').textContent = 'Menyimpan...';
+
+            try {
+                const response = await fetch(`${API_URL}${BIN_ID}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Master-Key': MASTER_KEY,
+                        'X-Bin-Meta-Data': 'false'
+                    },
+                    body: JSON.stringify(appData)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Gagal menyimpan: ${response.statusText}.`);
+                }
+                
+                updateStatus('Perubahan berhasil disimpan!', 'success');
+
+            } catch (error) {
+                console.error("Kesalahan saat menyimpan data:", error);
+                updateStatus(`Kesalahan menyimpan: ${error.message}`, 'error');
+            } finally {
+                document.getElementById('saveText').textContent = 'Simpan Perubahan (PUT)';
+                isSaving = false;
+            }
+        }
+
+        // --- Fungsi Manajemen Produk ---
+
+        /**
+         * Menambah produk baru dari form input
+         */
+        function addProduct() {
+            const name = document.getElementById('productName').value.trim();
+            const photoLink = document.getElementById('productPhotoLink').value.trim();
+            const price = document.getElementById('productPrice').value.trim();
+
+            if (!name || !price) {
+                updateStatus('Nama dan Harga produk harus diisi.', 'error');
+                return;
+            }
+            
+            const newProduct = {
+                id: Date.now().toString(36) + Math.random().toString(36).substring(2),
+                name: name,
+                photoLink: photoLink,
+                price: price
+            };
+
+            appData.products.unshift(newProduct);
+
+            // Bersihkan form
+            document.getElementById('productName').value = '';
+            document.getElementById('productPhotoLink').value = '';
+            document.getElementById('productPrice').value = '';
+
+            renderProducts();
+            saveData();
+        }
+
+        /**
+         * Menghapus produk berdasarkan ID
+         */
+        function deleteProduct(id) {
+            // Pengganti alert/confirm
+            const confirmation = window.confirm('Yakin ingin menghapus produk ini?'); 
+            
+            if (confirmation) {
+                appData.products = appData.products.filter(p => p.id !== id);
+                renderProducts();
+                saveData();
+                updateStatus('Produk berhasil dihapus dan disimpan.', 'success');
+            }
+        }
+
+        /**
+         * Merender daftar produk yang ada di UI
+         */
+        function renderProducts() {
+            const list = document.getElementById('productsList');
+            list.innerHTML = '';
+            
+            const count = appData.products.length;
+            document.getElementById('productsTitle').textContent = `Daftar Produk (${count} Produk)`;
+
+            if (count === 0) {
+                list.innerHTML = '<p class="text-center text-gray-500">Belum ada produk. Tambahkan produk baru di formulir sebelah kiri.</p>';
+                return;
+            }
+
+            appData.products.forEach(product => {
+                const productCard = `
+                    <div class="grid grid-cols-12 items-center p-3 bg-gray-50 rounded-lg shadow-sm hover:shadow-md transition duration-150 border border-gray-100">
+                        
+                        <!-- Nama & Foto -->
+                        <div class="col-span-12 sm:col-span-5 flex items-center mb-2 sm:mb-0">
+                            ${product.photoLink ? 
+                                `<img src="${product.photoLink}" onerror="this.onerror=null;this.src='https://placehold.co/40x40/fca5a5/ffffff?text=X'" alt="${product.name}" class="w-10 h-10 object-cover rounded mr-3">` :
+                                `<div class="w-10 h-10 bg-gray-300 rounded mr-3 flex items-center justify-center text-xs font-semibold text-white">IMG</div>`
+                            }
+                            <span class="font-medium text-gray-800">${product.name}</span>
+                        </div>
+                        
+                        <!-- Harga -->
+                        <div class="col-span-9 sm:col-span-4 text-gray-600 text-sm">
+                            <span class="sm:hidden font-semibold">Harga: </span>${product.price}
+                        </div>
+                        
+                        <!-- Aksi -->
+                        <div class="col-span-3 sm:col-span-3 flex justify-end space-x-2">
+                            <button onclick="deleteProduct('${product.id}')" class="btn bg-red-100 text-red-600 p-2 rounded-md hover:bg-red-200 text-sm font-semibold" title="Hapus Produk">
+                                Hapus
+                            </button>
+                        </div>
+                    </div>
+                `;
+                list.innerHTML += productCard;
+            });
+        }
+
+        // --- Fungsi Manajemen Pesanan ---
+
+        /**
+         * Mengubah status pesanan
+         */
+        function updateOrderStatus(orderId, newStatus) {
+            const orderIndex = appData.orders.findIndex(o => o.id === orderId);
+            if (orderIndex > -1) {
+                appData.orders[orderIndex].status = newStatus;
+                renderOrders(); // Render ulang untuk refleksi perubahan status
+                saveData(); // Simpan perubahan ke jsonbin.io
+                updateStatus(`Status pesanan ${orderId.substring(0, 5)}... diubah menjadi ${newStatus} dan disimpan.`, 'success');
+            }
+        }
+
+        /**
+         * Mendapatkan kelas warna untuk status
+         */
+        function getStatusClass(status) {
+            switch (status) {
+                case 'Acc': return 'bg-blue-100 text-blue-800';
+                case 'Tolak': return 'bg-red-100 text-red-800';
+                case 'Sukses': return 'bg-green-100 text-green-800';
+                case 'Pending': 
+                default: return 'bg-yellow-100 text-yellow-800';
+            }
+        }
+
+        /**
+         * Merender daftar pesanan yang ada di UI
+         */
+        function renderOrders() {
+            const list = document.getElementById('ordersList');
+            list.innerHTML = '';
+            
+            const count = appData.orders.length;
+            document.getElementById('ordersTitle').textContent = `Manajemen Pesanan (${count} Pesanan)`;
+
+            if (count === 0) {
+                list.innerHTML = '<p class="text-center text-gray-500">Belum ada pesanan masuk.</p>';
+                return;
+            }
+
+            // Membalik urutan pesanan agar yang terbaru di atas
+            const sortedOrders = [...appData.orders].reverse();
+
+            sortedOrders.forEach(order => {
+                const statusClass = getStatusClass(order.status);
+                
+                const orderCard = `
+                    <div class="card bg-white p-4 rounded-xl shadow border border-gray-200">
+                        <div class="sm:flex justify-between items-start border-b pb-2 mb-2">
+                            <div class="flex-1">
+                                <p class="text-sm font-semibold text-gray-600">ID Pesanan: ${order.id.substring(0, 8)}</p>
+                                <p class="text-lg font-bold text-gray-800">${order.productName}</p>
+                            </div>
+                            <span class="py-1 px-3 text-sm font-semibold rounded-full ${statusClass} mt-2 sm:mt-0">
+                                ${order.status || 'Pending'}
+                            </span>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-2 text-sm text-gray-700 mb-3">
+                            <div><span class="font-medium">Harga:</span> ${order.productPrice}</div>
+                            <div><span class="font-medium">Pengirim DANA:</span> ${order.senderName}</div>
+                            <div class="col-span-2"><span class="font-medium">Email:</span> ${order.email}</div>
+                        </div>
+
+                        <!-- Tombol Aksi -->
+                        <div class="flex flex-wrap gap-2 pt-2 border-t mt-2">
+                            <button onclick="updateOrderStatus('${order.id}', 'Acc')" class="flex-1 btn bg-blue-500 text-white text-xs py-2 px-3 rounded-md hover:bg-blue-600">ACC</button>
+                            <button onclick="updateOrderStatus('${order.id}', 'Tolak')" class="flex-1 btn bg-red-500 text-white text-xs py-2 px-3 rounded-md hover:bg-red-600">TOLAK</button>
+                            <button onclick="updateOrderStatus('${order.id}', 'Sukses')" class="flex-1 btn bg-green-500 text-white text-xs py-2 px-3 rounded-md hover:bg-green-600">SUKSES</button>
+                        </div>
+                    </div>
+                `;
+                list.innerHTML += orderCard;
+            });
+        }
+
+    </script>
 </body>
-    </html>
+</html>
+
+  
