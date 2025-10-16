@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin Panel</title>
+<style>
+body{background:#0b0b0b;color:#eafaf1;font-family:sans-serif;padding:14px}
+h1{color:#00d35b}
+input,button,textarea{padding:8px;margin:6px 0;border-radius:8px;border:none}
+button{cursor:pointer}
+.card{background:#111;padding:12px;border-radius:10px;margin:10px 0}
+img{max-width:100%;border-radius:8px}
+.accept{background:#00d35b;color:#001;padding:8px;border-radius:8px;border:none}
+.danger{background:#440000;color:#fff;padding:8px;border-radius:8px;border:none}
+.small{font-size:13px;color:#9aa5a0}
+</style>
+</head>
+<body>
+<h1>Admin Panel</h1>
+<p class="small">Tambah produk lewat form ini — tidak ada produk yang otomatis dibuat di JSONBin.</p>
+
+<div class="card">
+  <h3>Tambah Produk</h3>
+  <input id="pNama" placeholder="Nama produk (contoh: Gmail Fresh)"><br>
+  <input id="pFoto" placeholder="Link foto (https://...)"><br>
+  <input id="pHarga" placeholder="Harga (angka)"><br>
+  <button onclick="tambahProduk()" class="accept">Tambah Produk</button>
+</div>
+
+<div class="card">
+  <h3>Daftar Produk (dari JSONBin)</h3>
+  <div id="produkArea">Loading...</div>
+</div>
+
+<div class="card">
+  <h3>Pesanan</h3>
+  <div id="ordersArea">Loading...</div>
+</div>
+
+<script>
+const BIN_ID = "68f08ef8ae596e708f1668a6";
+const MASTER_KEY = "$2a$10$RrK3Tfyj9sFc1HEUXuTgmOa45uOdTGHwXOb6cDC9Kn.YO.Sca0hkW";
+const URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+
+async function fetchRecord(){
+  try{
+    const r = await fetch(`${URL}/latest`);
+    if(!r.ok) return {produk:[],orders:[]};
+    const j = await r.json();
+    return j.record || {produk:[],orders:[]};
+  }catch(e){
+    return {produk:[],orders:[]};
+  }
+}
+
+async function putRecord(record){
+  await fetch(URL, {
+    method: "PUT",
+    headers: {
+      "Content-Type":"application/json",
+      "X-Master-Key": MASTER_KEY
+    },
+    body: JSON.stringify(record)
+  });
+}
+
+// generate simple unique id
+function genId(prefix="p"){
+  return prefix + Date.now() + Math.floor(Math.random()*900).toString();
+}
+
+async function tambahProduk(){
+  const nama = document.getElementById("pNama").value.trim();
+  const foto = document.getElementById("pFoto").value.trim();
+  const harga = document.getElementById("pHarga").value.trim();
+  if(!nama || !harga){ alert("Isi nama dan harga"); return; }
+  const rec = await fetchRecord();
+  rec.produk = rec.produk || [];
+  const item = { id: genId("p"), nama, foto: foto||"", harga: Number(harga) };
+  rec.produk.push(item);
+  await putRecord(rec);
+  document.getElementById("pNama").value="";
+  document.getElementById("pFoto").value="";
+  document.getElementById("pHarga").value="";
+  await muat();
+  alert("Produk ditambahkan!");
+}
+
+async function muat(){
+  const rec = await fetchRecord();
+  // produk
+  const prodEl = document.getElementById("produkArea");
+  const produk = rec.produk || [];
+  if(produk.length===0) prodEl.innerHTML = "<div class='small'>Belum ada produk</div>";
+  else prodEl.innerHTML = produk.map(p=>`
+    <div style="margin-bottom:8px;padding:8px;background:#0f0f0f;border-radius:8px">
+      <b>${p.nama}</b><br>
+      Harga: Rp ${p.harga}<br>
+      ${p.foto?`<img src="${p.foto}" style="max-width:180px;margin-top:6px">`:""}
+      <div style="margin-top:6px">
+        <button onclick='editProduk("${p.id}")' style="margin-right:6px">Edit</button>
+        <button onclick='hapusProduk("${p.id}")' class="danger">Hapus</button>
+      </div>
+    </div>
+  `).join("");
+  // orders
+  const ordEl = document.getElementById("ordersArea");
+  const orders = rec.orders || [];
+  if(orders.length===0) ordEl.innerHTML = "<div class='small'>Belum ada pesanan</div>";
+  else ordEl.innerHTML = orders.map((o,idx)=>`
+    <div style="margin-bottom:10px;padding:10px;background:#0f0f0f;border-radius:8px">
+      <b>${o.produkNama||o.produkId}</b><br>
+      Pengirim: ${o.nama || "-"}<br>
+      Kontak: ${o.kontak || "-"}<br>
+      Status: <b>${o.status || "pending"}</b><br>
+      ${o.status === "pending" ? `
+        <button onclick='accOrder(${idx})' class="accept">ACC (kirim akun)</button>
+        <button onclick='rejectOrder(${idx})' class="danger">Tolak</button>
+      ` : o.status === "accepted" ? `
+        ✅ Diterima<br>Email: ${o.akun?.email||"-"}<br>Pass: ${o.akun?.pass||"-"}
+      ` : `❌ Ditolak`}
+    </div>
+  `).join("");
+}
+
+async function editProduk(id){
+  const rec = await fetchRecord();
+  const p = (rec.produk||[]).find(x=>x.id===id);
+  if(!p) return alert("Produk tidak ditemukan");
+  const nama = prompt("Nama produk:", p.nama);
+  if(nama===null) return;
+  const foto = prompt("Link foto (kosong = tetap):", p.foto||"");
+  if(foto===null) return;
+  const harga = prompt("Harga:", p.harga);
+  if(harga===null) return;
+  p.nama = nama.trim()||p.nama;
+  p.foto = foto.trim();
+  p.harga = Number(harga) || p.harga;
+  await putRecord(rec);
+  await muat();
+}
+
+async function hapusProduk(id){
+  if(!confirm("Hapus produk ini?")) return;
+  const rec = await fetchRecord();
+  rec.produk = (rec.produk||[]).filter(x=>x.id!==id);
+  await putRecord(rec);
+  await muat();
+}
+
+async function accOrder(idx){
+  const rec = await fetchRecord();
+  const order = rec.orders[idx];
+  if(!order) return alert("Order tidak ditemukan");
+  const email = prompt("Masukkan EMAIL untuk dikirim ke pembeli:");
+  if(email===null) return;
+  const pass = prompt("Masukkan PASSWORD untuk akun:");
+  if(pass===null) return;
+  order.status = "accepted";
+  order.akun = { email, pass };
+  // save
+  await putRecord(rec);
+  await muat();
+  alert("Order di-ACC. Akun tersimpan di order.");
+}
+
+async function rejectOrder(idx){
+  const rec = await fetchRecord();
+  const order = rec.orders[idx];
+  if(!order) return alert("Order tidak ditemukan");
+  if(!confirm("Tolak order ini?")) return;
+  order.status = "rejected";
+  await putRecord(rec);
+  await muat();
+}
+
+// load
+muat();
+</script>
+</body>
+    </html>
